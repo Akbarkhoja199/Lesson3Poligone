@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GeoJSON Map with District Labels</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Подключение стилей Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <style>
+        #map {
+            height: 100vh; /* Карта занимает весь экран */
+        }
+        /* Стиль для текста подсказок */
+        .district-label {
+            font-weight: bold;
+            color: black;
+            text-shadow: 1px 1px 2px black;
+        }
+        .legend {
+            background: white;
+            line-height: 18px;
+            padding: 6px 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+            border-radius: 5px;
+            font-size: 12px;
+        }
+        .legend i {
+            width: 18px;
+            height: 18px;
+            float: left;
+            margin-right: 8px;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+
+    <!-- Подключение скриптов Leaflet -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script>
+        // Инициализация карты с центром на Ташкенте
+        const map = L.map('map').setView([41.311081, 69.240562], 11);
+
+        // Добавление тёмной подложки карты от Carto
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Функция для определения центра полигона
+        function getPolygonCenter(feature) {
+            return L.geoJSON(feature).getBounds().getCenter();
+        }
+        
+                // Классификация цветов
+                function getColor(value) {
+            value *= 1000; // Умножение на 1000
+            return value > 404000 ? '#800026' :
+                   value > 300000 ? '#BD0026' :
+                   value > 200000 ? '#E31A1C' :
+                   value > 100000 ? '#FD8D3C' :
+                   value > 60500  ? '#FEB24C' :
+                                    '#FFEDA0';
+        }
+
+        // Стиль слоя
+        function style(feature) {
+            const value = feature.properties['2024'] || 0; // Проверка наличия данных
+            return {
+                fillColor: getColor(value),
+                weight: 2,
+                opacity: 1,
+                color: 'white',
+                dashArray: '3',
+                fillOpacity: 0.7
+            };
+        }
+        
+        // Легенда
+        const legend = L.control({ position: 'bottomright' });
+        legend.onAdd = function () {
+            const div = L.DomUtil.create('div', 'legend');
+            const grades = [60.5, 100, 200, 300, 404.4];
+
+            div.innerHTML += '<b>Population classification for 2024:</b><br>';
+            for (let i = 0; i < grades.length; i++) {
+                const from = grades[i];
+                const to = grades[i + 1];
+                div.innerHTML +=
+                    `<i style="background:${getColor(from)}"></i> ${from * 1000}–${(to ? to * 1000 : '∞')}<br>`;
+            }
+
+            // Добавление данных автора
+            div.innerHTML += '<hr>'; // Разделитель
+            div.innerHTML += `<small><b>Autor:</b> Abdurakhimov Akbarkhoja<br>` +
+                            `<b>Contact:</b> abduraximovakbarxoja@gmail.com</small>`;
+            return div;
+        };
+        legend.addTo(map);
+
+
+
+ // Загрузка GeoJSON файла
+ fetch('Tashkent1.qmd.geojson')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(geojsonData => {
+                // Добавление GeoJSON слоя
+                const geojsonLayer = L.geoJSON(geojsonData, {
+                    style: style,
+                    onEachFeature: function (feature, layer) {
+                        // Всплывающее окно
+                        let popupContent = '<b>District:</b> ' + feature.properties.district + '<br>' +
+                                           '<b>2024:</b> ' + feature.properties['2024'] * 1000;
+                        layer.bindPopup(popupContent);
+
+                        // Постоянная подсказка
+                        const center = getPolygonCenter(feature);
+                        const tooltip = L.tooltip({
+                            permanent: true,
+                            direction: 'center',
+                            className: 'district-label',
+                            offset: [0, 0]
+                        })
+                        .setContent(feature.properties.district)
+                        .setLatLng(center);
+                        map.addLayer(tooltip);
+                    }
+                }).addTo(map);
+            })
+            .catch(error => console.error('Ошибка загрузки GeoJSON файла:', error));
+    </script>
+</body>
+</html>
